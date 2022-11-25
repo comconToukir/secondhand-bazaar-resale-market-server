@@ -91,6 +91,17 @@ const run = async () => {
 
       res.send(result);
     })
+
+    // delete a product from seller
+    app.delete('/delete-product/:id', async (req, res) => {
+      const id = req.params.id;
+
+      const filter = { _id: ObjectId(id) };
+
+      const result = await productsCollection.deleteOne(filter);
+
+      res.send(result);
+    })
   }
   finally {
 
