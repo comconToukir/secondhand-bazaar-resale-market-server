@@ -55,6 +55,15 @@ const run = async () => {
       res.send(categories);
     })
 
+    // get three categories for home page
+    app.get('/get-three-categories', async (req, res) => {
+      const query = {};
+
+      const categories = await categoriesCollection.find(query).limit(3).toArray();
+
+      res.send(categories);
+    })
+
     // get individual category
     app.get('/category/:id', async (req, res) => {
       const id = req.params.id;
@@ -62,6 +71,19 @@ const run = async () => {
       const query = { categoryId: ObjectId(id) }
 
       const products = await productsCollection.find(query).toArray();
+
+      res.send(products);
+    })
+
+    // get advertised products
+    app.get('/advertisements', async (req, res) => {
+      const query = { isAdvertised: true };
+
+      const options = {
+        sort: { _id: -1 }
+      }
+
+      const products = await productsCollection.find(query, options).toArray();
 
       res.send(products);
     })
