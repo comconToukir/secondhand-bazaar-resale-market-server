@@ -22,6 +22,7 @@ const run = async () => {
     const bazaarDb = client.db("bazaarDb");
     const usersCollection = bazaarDb.collection("users");
     const productsCollection = bazaarDb.collection("products");
+    const categoriesCollection = bazaarDb.collection("categories");
 
     // if new user add if logged in with google
     app.put('/user', async (req, res) => {
@@ -43,6 +44,26 @@ const run = async () => {
       const result = await usersCollection.updateOne(filter, updateDoc, options);
 
       res.send(result);
+    })
+
+    // get categories
+    app.get('/get-categories', async (req, res) => {
+      const query = {};
+
+      const categories = await categoriesCollection.find(query).toArray();
+
+      res.send(categories);
+    })
+
+    // get individual category
+    app.get('/category/:id', async (req, res) => {
+      const id = req.params.id;
+
+      const query = { categoryId: ObjectId(id) }
+
+      const products = await productsCollection.find(query).toArray();
+
+      res.send(products);
     })
 
     // check the user's role
