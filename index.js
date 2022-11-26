@@ -23,6 +23,7 @@ const run = async () => {
     const usersCollection = bazaarDb.collection("users");
     const productsCollection = bazaarDb.collection("products");
     const categoriesCollection = bazaarDb.collection("categories");
+    const bookingsCollection = bazaarDb.collection('bookings');
 
     // if new user add if logged in with google
     app.put('/user', async (req, res) => {
@@ -50,7 +51,11 @@ const run = async () => {
     app.get('/get-categories', async (req, res) => {
       const query = {};
 
-      const categories = await categoriesCollection.find(query).toArray();
+      const options = {
+        sort: { _id: -1 }
+      }
+
+      const categories = await categoriesCollection.find(query, options).toArray();
 
       res.send(categories);
     })
@@ -59,7 +64,11 @@ const run = async () => {
     app.get('/get-three-categories', async (req, res) => {
       const query = {};
 
-      const categories = await categoriesCollection.find(query).limit(3).toArray();
+      const options = {
+        sort: { _id: -1 }
+      }
+
+      const categories = await categoriesCollection.find(query, options).limit(3).toArray();
 
       res.send(categories);
     })
@@ -102,6 +111,8 @@ const run = async () => {
     app.post('/add-product', async (req, res) => {
       const productData = req.body;
 
+      productData.categoryId = ObjectId(productData.categoryId);
+
       const result = await productsCollection.insertOne(productData);
 
       res.send(result);
@@ -142,6 +153,15 @@ const run = async () => {
       const filter = { _id: ObjectId(id) };
 
       const result = await productsCollection.deleteOne(filter);
+
+      res.send(result);
+    })
+
+    // book a product
+    app.post('/book-product', async (req, res) => {
+      const booking = req.body;
+
+      const result = await bookingsCollection.insertOne(booking);
 
       res.send(result);
     })
