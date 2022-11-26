@@ -353,6 +353,24 @@ const run = async () => {
       res.send(result)
     })
 
+    // admin route - all sellers
+    app.get('/all-sellers', async (req, res) => {
+      const query = { role: "seller" };
+
+      const sellers = await usersCollection.find(query).sort({ _id: -1 }).toArray();
+
+      res.send(sellers);
+    })
+
+    // admin route - all buyers
+    app.get('/all-buyers', async (req, res) => {
+      const query = { role: "buyer" };
+
+      const sellers = await usersCollection.find(query).sort({ _id: -1 }).toArray();
+
+      res.send(sellers);
+    })
+
 
     //TODO: aggregate to get payment info and remove unnecessary data
     // get all sold products for seller
