@@ -273,6 +273,7 @@ const run = async () => {
       //   sort: { _id: -1 }
       // }
 
+      //TODO: aggregate filter by isPaid and boughtBy
       // to get only users own data in bookers
       const pipeline = [
         {
@@ -352,6 +353,19 @@ const run = async () => {
       res.send(result)
     })
 
+
+    //TODO: aggregate to get payment info and remove unnecessary data
+    // get all sold products for seller
+    app.get('/sold-products', async (req, res) => {
+      const email = req.query.email;
+
+      const query = { sellerEmail: email, isPaid: true };
+
+      const products = await bookingsCollection.find(query).sort({ _id: -1 }).toArray();
+
+      res.send(products);
+    })
+
     // create payment intent
     app.post('/create-payment-intent', async (req, res) => {
       const data = req.body;
@@ -366,6 +380,7 @@ const run = async () => {
       res.send({clientSecret: paymentIntent.client_secret})
     })
 
+    //TODO: aggregate to remove bookers data in bookingsCollection other than buyer
     // post payments to database
     app.post('/save-payment-info', async (req, res) => {
       const payment = req.body;
