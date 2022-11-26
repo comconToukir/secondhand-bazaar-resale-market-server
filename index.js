@@ -161,7 +161,7 @@ const run = async () => {
     app.put('/book-product', async (req, res) => {
       const booking = req.body;
 
-      console.log(booking);
+      // console.log(booking);
 
       const booker = {
         bookerName: booking.fullName,
@@ -259,7 +259,7 @@ const run = async () => {
     app.get('/book-product', async (req, res) => {
       const email = req.query.email;
 
-      console.log(email);
+      // console.log(email);
 
       // const query = {
       //   bookers: {
@@ -311,7 +311,7 @@ const run = async () => {
       // const products = await bookingsCollection.find(query, options).toArray();
       const products = await bookingsCollection.aggregate(pipeline).sort({ _id: -1 }).toArray()
 
-      console.log(products);
+      // console.log(products);
 
       res.send(products);
     })
@@ -321,11 +321,20 @@ const run = async () => {
       const email = req.query.email;
       const id = req.query.id;
 
-      console.log(email, id);
+      const filter = { productId: ObjectId(id) };
 
-      const query = { email: email }
+      // removing data of user from booker array
+      const updateDoc = {
+        $pull: {
+          bookers: {
+            bookerEmail: email
+          }
+        }
+      }
 
-      res.send('req received')
+      const result = await bookingsCollection.updateOne(filter, updateDoc);
+
+      res.send(result)
     })
 
   }
