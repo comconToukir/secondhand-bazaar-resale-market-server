@@ -2,6 +2,7 @@ const express = require('express');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 
@@ -24,6 +25,7 @@ const run = async () => {
     const productsCollection = bazaarDb.collection("products");
     const categoriesCollection = bazaarDb.collection("categories");
     const bookingsCollection = bazaarDb.collection('bookings');
+    const paymentsCollection = bazaarDb.collection("payments");
 
     // if new user add if logged in with google
     app.put('/user', async (req, res) => {
@@ -267,6 +269,10 @@ const run = async () => {
       //   }
       // };
 
+      // const options = {
+      //   sort: { _id: -1 }
+      // }
+
       // to get only users own data in bookers
       const pipeline = [
         {
@@ -289,6 +295,8 @@ const run = async () => {
             "sellerEmail": 1,
             "sellerContact": 1,
             "sellerName": 1,
+            "isPaid": 1,
+            "boughtBy": 1,
             "bookers": {
               "$filter": {
                 "input": "$bookers",
@@ -304,16 +312,23 @@ const run = async () => {
         }
       ]
 
-      const options = {
-        sort: { _id: -1 }
-      }
-
       // const products = await bookingsCollection.find(query, options).toArray();
       const products = await bookingsCollection.aggregate(pipeline).sort({ _id: -1 }).toArray()
 
       // console.log(products);
 
       res.send(products);
+    })
+
+    // get booking for payment
+    app.get('/payment-booking/:id', async (req, res) => {
+      const id = req.params.id;
+
+      const query = { _id: ObjectId(id) };
+
+      const booking = await bookingsCollection.findOne(query);
+
+      res.send(booking);
     })
 
     // delete a single booking
@@ -335,6 +350,49 @@ const run = async () => {
       const result = await bookingsCollection.updateOne(filter, updateDoc);
 
       res.send(result)
+    })
+
+    // create payment intent
+    app.post('/create-payment-intent', async (req, res) => {
+      const data = req.body;
+      const amount = data.price * 100;
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card'],
+      })
+
+      res.send({clientSecret: paymentIntent.client_secret})
+    })
+
+    // post payments to database
+    app.post('/save-payment-info', async (req, res) => {
+      const payment = req.body;
+      const email = payment.email;
+      const productId = payment.productId;
+      const bookingId = payment.bookingId;
+
+      const deleteFilter = { _id: ObjectId(productId) };
+
+      const updateFilter = { _id: ObjectId(bookingId) };
+
+      const updateDoc = {
+        $set: {
+          isPaid: true,
+          boughtBy: email
+        }
+      }
+
+      const options = { upsert: true };
+
+
+
+      const deleteResult = await productsCollection.deleteOne(deleteFilter);
+      const updateResult = await bookingsCollection.updateOne(updateFilter, updateDoc, options);
+      const insertResult = await paymentsCollection.insertOne(payment);
+
+      res.send(insertResult);
     })
 
   }
