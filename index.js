@@ -75,7 +75,7 @@ const run = async () => {
       res.send(categories);
     })
 
-    // get individual category
+    // get products of individual category
     app.get('/category/:id', async (req, res) => {
       const id = req.params.id;
 
@@ -86,6 +86,40 @@ const run = async () => {
       res.send(products);
     })
 
+    // get products of individual category with seller data 
+    app.get('/v2/category/:id', async (req, res) => {
+      const id = req.params.id;
+
+      const pipeline = [
+        {
+          $match: {
+            categoryId: ObjectId(id),
+          }
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "sellerEmail",
+            foreignField: "email",
+            as: "sellerData",
+          }
+        },
+        {
+          $project: {
+            sellerEmail: 0
+          }
+        },
+        { $sort: { _id: -1 } }
+      ]
+
+      const products = await productsCollection.aggregate(pipeline).toArray();
+
+
+      res.send(products);
+    })
+
+
+
     // get advertised products
     app.get('/advertisements', async (req, res) => {
       const query = { isAdvertised: true };
@@ -95,6 +129,65 @@ const run = async () => {
       }
 
       const products = await productsCollection.find(query, options).toArray();
+
+      res.send(products);
+    })
+
+    // get advertised products with seller data 
+    app.get('/v2/advertisements', async (req, res) => {
+      const pipeline = [
+        {
+          $match: {
+            isAdvertised: true,
+          }
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "sellerEmail",
+            foreignField: "email",
+            as: "sellerData",
+          }
+        },
+        {
+          $project: {
+            sellerEmail: 0
+          }
+        },
+        { $sort: { _id: -1 } }
+      ]
+
+      const products = await productsCollection.aggregate(pipeline).toArray();
+
+      res.send(products);
+    })
+
+    // for home page - get advertised products with seller data
+    app.get('/v2/home-advertisements', async (req, res) => {
+      const pipeline = [
+        {
+          $match: {
+            isAdvertised: true,
+          }
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "sellerEmail",
+            foreignField: "email",
+            as: "sellerData",
+          }
+        },
+        {
+          $project: {
+            sellerEmail: 0
+          }
+        },
+        { $sort: { _id: -1 } },
+        { $limit: 3 }
+      ]
+
+      const products = await productsCollection.aggregate(pipeline).toArray();
 
       res.send(products);
     })
@@ -416,7 +509,7 @@ const run = async () => {
         payment_method_types: ['card'],
       })
 
-      res.send({clientSecret: paymentIntent.client_secret})
+      res.send({ clientSecret: paymentIntent.client_secret })
     })
 
     //TODO: aggregate to remove bookers data in bookingsCollection other than buyer
