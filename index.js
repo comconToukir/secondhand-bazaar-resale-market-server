@@ -26,6 +26,7 @@ const run = async () => {
     const categoriesCollection = bazaarDb.collection("categories");
     const bookingsCollection = bazaarDb.collection('bookings');
     const paymentsCollection = bazaarDb.collection("payments");
+    const wishlistCollection = bazaarDb.collection("wishlist");
 
     // if new user add if logged in with google
     app.put('/user', async (req, res) => {
@@ -252,11 +253,18 @@ const run = async () => {
       res.send(result);
     })
 
+    // add to wishlist
+    app.post("/add-to-wishlist", async (req, res) => {
+      const data = req.body;
+
+      const result = await wishlistCollection.insertOne(data);
+
+      res.send(result);
+    })
+
     // book a product
     app.put('/book-product', async (req, res) => {
       const booking = req.body;
-
-      // console.log(booking);
 
       const booker = {
         bookerName: booking.fullName,
@@ -389,6 +397,7 @@ const run = async () => {
             "sellerEmail": 1,
             "sellerContact": 1,
             "sellerName": 1,
+            "sellerRemoved": 1,
             "isPaid": 1,
             "boughtBy": 1,
             "bookers": {
@@ -412,17 +421,6 @@ const run = async () => {
       // console.log(products);
 
       res.send(products);
-    })
-
-    // get booking for payment
-    app.get('/payment-booking/:id', async (req, res) => {
-      const id = req.params.id;
-
-      const query = { _id: ObjectId(id) };
-
-      const booking = await bookingsCollection.findOne(query);
-
-      res.send(booking);
     })
 
     // delete a single booking
@@ -483,6 +481,50 @@ const run = async () => {
       const result = await usersCollection.updateOne(filter, updateDoc, options);
 
       res.send(result);
+    })
+
+    app.delete('/remove-buyer', async (req, res) => {
+      const id = req.query.id;
+
+      const filter = { _id: ObjectId(id) };
+
+      const result = await usersCollection.deleteOne(filter);
+
+      res.send(result);
+    })
+
+    app.delete('/remove-seller', async (req, res) => {
+      const email = req.query.email;
+
+      // console.log(email)
+
+      const productFilter = { sellerEmail: email };
+      const deleteFilter = { email: email };
+
+      const bookingFilter = { sellerEmail: email };
+      const updateDoc = {
+        $set: {
+          sellerRemoved: true,
+        }
+      }
+      const options = { upsert: true };
+
+      const productResult = await productsCollection.deleteMany(productFilter);
+      const bookingsResult = await bookingsCollection.updateMany(bookingFilter, updateDoc, options);
+      const result = await usersCollection.deleteOne(deleteFilter);
+
+      res.send(result);
+    })
+
+    // get booking for payment
+    app.get('/payment-booking/:id', async (req, res) => {
+      const id = req.params.id;
+
+      const query = { _id: ObjectId(id) };
+
+      const booking = await bookingsCollection.findOne(query);
+
+      res.send(booking);
     })
 
 
