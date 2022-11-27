@@ -371,6 +371,27 @@ const run = async () => {
       res.send(sellers);
     })
 
+    // admin route
+    app.put('/verify-seller', async (req, res) => {
+      const sellerId = req.body.sellerId;
+
+      const filter = { _id: ObjectId(sellerId) };
+
+      const updateDoc = {
+        $set: {
+          isVerified: true,
+        }
+      }
+
+      const options = {
+        upsert: true,
+      }
+
+      const result = await usersCollection.updateOne(filter, updateDoc, options);
+
+      res.send(result);
+    })
+
 
     //TODO: aggregate to get payment info and remove unnecessary data
     // get all sold products for seller
