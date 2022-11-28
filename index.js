@@ -1,6 +1,7 @@
 const express = require('express');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -13,6 +14,26 @@ const port = process.env.PORT || 5000;
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.n9sry.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
+
+const verifyJwt = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+    if (err) {
+      return res.status(403).send({ message: 'forbidden access' })
+    }
+
+    req.decoded = decoded;
+    next()
+  })
+
+}
 
 app.get('/', (req, res) => {
   res.send('secondhand server running')
@@ -27,6 +48,62 @@ const run = async () => {
     const bookingsCollection = bazaarDb.collection('bookings');
     const paymentsCollection = bazaarDb.collection("payments");
     const wishlistCollection = bazaarDb.collection("wishlist");
+    const reportedProductsCollection = bazaarDb.collection("reportedProducts");
+    const blogsCollection = bazaarDb.collection("blogs");
+
+
+    // authorization middlewares & routes
+    app.get('/jwt', async (req, res) => {
+      const email = req.query.email;
+
+      // console.log(email)
+
+      const query = { email: email };
+
+      const user = await usersCollection.findOne(query);
+
+      if (user) {
+        const token = jwt.sign({ email, role: user.role }, process.env.ACCESS_TOKEN, {
+          expiresIn: '1d'
+        })
+
+        return res.send({ accessToken: token });
+      }
+
+      res.status(403).send({ accessToken: '' });
+    });
+
+    // admin check
+    const verifyAdmin = async (req, res, next) => {
+      const decodedEmail = req.decoded.email;
+
+      const query = { email: decodedEmail };
+
+      const user = await usersCollection.findOne(query);
+
+      if (user.role !== "admin") {
+        return res.status(403).send({ message: 'forbidden access '});
+      }
+      
+      next();
+    }
+
+    // seller check
+    const verifySeller = async (req, res, next) => {
+      const decodedEmail = req.decoded.email;
+
+      const query = { email: decodedEmail };
+
+      const user = await usersCollection.findOne(query);
+
+      if (user.role !== "seller") {
+        return res.status(403).send({ message: 'forbidden access '});
+      }
+
+      next();
+    }
+
+
 
     // if new user add if logged in with google
     app.put('/user', async (req, res) => {
@@ -48,6 +125,19 @@ const run = async () => {
       const result = await usersCollection.updateOne(filter, updateDoc, options);
 
       res.send(result);
+    })
+
+    // get categories
+    app.get('/blogs', async (req, res) => {
+      const query = {};
+
+      const options = {
+        sort: { _id: -1 }
+      }
+
+      const blogs = await blogsCollection.find(query, options).toArray();
+
+      res.send(blogs);
     })
 
     // get categories
@@ -204,7 +294,7 @@ const run = async () => {
     })
 
     // create a new product
-    app.post('/add-product', async (req, res) => {
+    app.post('/add-product', verifyJwt, verifySeller, async (req, res) => {
       const productData = req.body;
 
       productData.categoryId = ObjectId(productData.categoryId);
@@ -215,8 +305,10 @@ const run = async () => {
     })
 
     // get all products for seller
-    app.get('/all-products/:email', async (req, res) => {
+    app.get('/all-products/:email', verifyJwt, verifySeller, async (req, res) => {
       const email = req.params.email;
+
+      console.log(email);
 
       const query = { sellerEmail: email };
 
@@ -226,7 +318,7 @@ const run = async () => {
     })
 
     // update a product as advertised
-    app.put('/advertise/:id', async (req, res) => {
+    app.put('/advertise/:id', verifyJwt, verifySeller, async (req, res) => {
       const id = req.params.id;
 
       const filter = { _id: ObjectId(id) };
@@ -242,19 +334,21 @@ const run = async () => {
       res.send(result);
     })
 
-    // delete a product from seller
-    app.delete('/delete-product/:id', async (req, res) => {
+    // delete a product from seller and admin
+    app.delete('/delete-product/:id', verifyJwt, async (req, res) => {
       const id = req.params.id;
 
       const filter = { _id: ObjectId(id) };
+      const reportFilter = { reportedProductId: ObjectId(id) };
 
+      const reportResult = await reportedProductsCollection.deleteMany(reportFilter);
       const result = await productsCollection.deleteOne(filter);
 
       res.send(result);
     })
 
     // add to wishlist
-    app.post("/add-to-wishlist", async (req, res) => {
+    app.post("/add-to-wishlist", verifyJwt, async (req, res) => {
       const data = req.body;
 
       const result = await wishlistCollection.insertOne(data);
@@ -263,7 +357,7 @@ const run = async () => {
     })
 
     // book a product
-    app.put('/book-product', async (req, res) => {
+    app.put('/book-product', verifyJwt, async (req, res) => {
       const booking = req.body;
 
       const booker = {
@@ -359,7 +453,7 @@ const run = async () => {
     })
 
     // get bookings of a single buyer
-    app.get('/book-product', async (req, res) => {
+    app.get('/book-product', verifyJwt, async (req, res) => {
       const email = req.query.email;
 
       // console.log(email);
@@ -424,7 +518,7 @@ const run = async () => {
     })
 
     // delete a single booking
-    app.delete('/book-product', async (req, res) => {
+    app.delete('/book-product', verifyJwt, async (req, res) => {
       const email = req.query.email;
       const id = req.query.id;
 
@@ -444,8 +538,37 @@ const run = async () => {
       res.send(result)
     })
 
+    // report product
+    app.post('/reported-product', verifyJwt, async (req, res) => {
+      const product = req.body;
+
+      const id = { reportedProductId: ObjectId(product.id) };
+
+      const result = await reportedProductsCollection.insertOne(id);
+
+      res.send(result);
+    })
+
+    // admin route
+    app.get('/reported-product', verifyJwt, verifyAdmin, async (req, res) => {
+      const pipeline = [
+        {
+          $lookup: {
+            from: "products",
+            localField: "reportedProductId",
+            foreignField: "_id",
+            as: "productData",
+          }
+        }
+      ]
+
+      const products = await reportedProductsCollection.aggregate(pipeline).toArray();
+
+      res.send(products);
+    })
+
     // admin route - all sellers
-    app.get('/all-sellers', async (req, res) => {
+    app.get('/all-sellers', verifyJwt, verifyAdmin, async (req, res) => {
       const query = { role: "seller" };
 
       const sellers = await usersCollection.find(query).sort({ _id: -1 }).toArray();
@@ -454,7 +577,7 @@ const run = async () => {
     })
 
     // admin route - all buyers
-    app.get('/all-buyers', async (req, res) => {
+    app.get('/all-buyers', verifyJwt, verifyAdmin, async (req, res) => {
       const query = { role: "buyer" };
 
       const sellers = await usersCollection.find(query).sort({ _id: -1 }).toArray();
@@ -483,7 +606,8 @@ const run = async () => {
       res.send(result);
     })
 
-    app.delete('/remove-buyer', async (req, res) => {
+    // admin route
+    app.delete('/remove-buyer', verifyJwt, verifyAdmin, async (req, res) => {
       const id = req.query.id;
 
       const filter = { _id: ObjectId(id) };
@@ -493,7 +617,8 @@ const run = async () => {
       res.send(result);
     })
 
-    app.delete('/remove-seller', async (req, res) => {
+    // admin route
+    app.delete('/remove-seller', verifyJwt, verifyAdmin, async (req, res) => {
       const email = req.query.email;
 
       // console.log(email)
@@ -517,7 +642,7 @@ const run = async () => {
     })
 
     // get booking for payment
-    app.get('/payment-booking/:id', async (req, res) => {
+    app.get('/payment-booking/:id', verifyJwt, async (req, res) => {
       const id = req.params.id;
 
       const query = { _id: ObjectId(id) };
@@ -530,7 +655,7 @@ const run = async () => {
 
     //TODO: aggregate to get payment info and remove unnecessary data
     // get all sold products for seller
-    app.get('/sold-products', async (req, res) => {
+    app.get('/sold-products', verifyJwt, verifySeller, async (req, res) => {
       const email = req.query.email;
 
       const query = { sellerEmail: email, isPaid: true };
@@ -541,7 +666,7 @@ const run = async () => {
     })
 
     // create payment intent
-    app.post('/create-payment-intent', async (req, res) => {
+    app.post('/create-payment-intent', verifyJwt, async (req, res) => {
       const data = req.body;
       const amount = data.price * 100;
 
@@ -556,7 +681,7 @@ const run = async () => {
 
     //TODO: aggregate to remove bookers data in bookingsCollection other than buyer
     // post payments to database
-    app.post('/save-payment-info', async (req, res) => {
+    app.post('/save-payment-info', verifyJwt, async (req, res) => {
       const payment = req.body;
       const email = payment.email;
       const productId = payment.productId;
